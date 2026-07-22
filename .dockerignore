@@ -1,0 +1,4 @@
+node_modules
+clones
+*.zip
+.env.local

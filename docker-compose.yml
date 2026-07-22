@@ -1,0 +1,28 @@
+#version: '3.8'
+
+services:
+  web-clone-agent:
+    build: .
+    container_name: web-clone-agent
+    env_file:
+      - .env
+    ports:
+      - "${PORT}:${PORT}"
+    volumes:
+      # ★ Persistent storage for all cloned pages
+      - ./clones:/app/clones
+    depends_on:
+      - camoufox
+    restart: unless-stopped
+
+  camoufox:
+    build:
+      context: .
+      dockerfile: Dockerfile.camoufox
+    container_name: web-clone-agent-camoufox
+    # Firefox's sandbox needs to create user namespaces, which Docker's
+    # default seccomp profile blocks (EPERM on clone()).
+    security_opt:
+      - seccomp:unconfined
+    shm_size: '1gb'
+    restart: unless-stopped

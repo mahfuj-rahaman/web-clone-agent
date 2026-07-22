@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web Clone Agent</title>
+    <style>
+        :root {
+            --bg-primary: #0f172a; --bg-secondary: #1e293b; --bg-tertiary: #334155;
+            --text-primary: #f8fafc; --text-secondary: #94a3b8;
+            --accent: #38bdf8; --accent-hover: #0ea5e9;
+            --success: #22c55e; --error: #ef4444; --border: #475569;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg-primary); color: var(--text-primary); min-height: 100vh; display: flex; justify-content: center; padding: 2rem; }
+        .container { width: 100%; max-width: 1000px; display: flex; flex-direction: column; gap: 1.5rem; }
+        header { text-align: center; }
+        h1 { font-size: 2rem; background: linear-gradient(90deg, var(--accent), #a78bfa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .subtitle { color: var(--text-secondary); font-size: 0.95rem; }
+        .card { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; }
+        .input-group { display: flex; gap: 1rem; }
+        input[type="text"] { flex: 1; padding: 0.75rem 1rem; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 8px; color: var(--text-primary); font-size: 1rem; outline: none; }
+        input[type="text"]:focus { border-color: var(--accent); }
+        button { padding: 0.75rem 1.5rem; background: var(--accent); color: var(--bg-primary); border: none; border-radius: 8px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+        button:hover { background: var(--accent-hover); }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-secondary { background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border); }
+        .btn-zip { background: var(--success); color: #fff; }
+        .status { padding: 0.75rem 1rem; border-radius: 8px; font-size: 0.9rem; display: none; }
+        .status.show { display: block; }
+        .status.info { background: rgba(56,189,248,0.1); color: var(--accent); border: 1px solid rgba(56,189,248,0.3); }
+        .status.success { background: rgba(34,197,94,0.1); color: var(--success); border: 1px solid rgba(34,197,94,0.3); }
+        .status.error { background: rgba(239,68,68,0.1); color: var(--error); border: 1px solid rgba(239,68,68,0.3); }
+        .checkbox-group { display: flex; align-items: center; gap: 0.5rem; margin-top: 1rem; color: var(--text-secondary); font-size: 0.9rem; }
+        .checkbox-group input { width: 16px; height: 16px; accent-color: var(--accent); }
+        .clones-list { margin-top: 1rem; }
+        .clone-item { padding: 0.75rem 1rem; background: var(--bg-tertiary); border-radius: 8px; margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center; font-size: 0.9rem; }
+        .clone-item .meta { color: var(--text-secondary); font-size: 0.8rem; }
+        .actions { display: flex; gap: 0.75rem; flex-wrap: wrap; margin-top: 1rem; }
+        .progress-bar { width: 100%; height: 4px; background: var(--bg-tertiary); border-radius: 2px; margin-top: 0.75rem; overflow: hidden; display: none; }
+        .progress-bar.show { display: block; }
+        .progress-bar-fill { height: 100%; background: var(--accent); width: 0%; transition: width 0.3s; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <header>
+        <h1>Web Clone Agent</h1>
+        <p class="subtitle">AI-first page cloning · CLI · MCP · REST API · Browser GUI</p>
+    </header>
+
+    <div class="card">
+        <div class="input-group">
+            <input type="text" id="urlInput" placeholder="https://example.com" value="https://example.com">
+            <button id="cloneBtn">Clone Page</button>
+        </div>
+        <div class="checkbox-group">
+            <input type="checkbox" id="includeImages" checked>
+            <label for="includeImages">Include Images (SEO paths preserved)</label>
+        </div>
+        <div class="checkbox-group">
+            <input type="checkbox" id="removeScripts" checked>
+            <label for="removeScripts">Remove JavaScript</label>
+        </div>
+        <div class="checkbox-group" style="gap:1.25rem;">
+            <span>Fetch method:</span>
+            <label style="display:flex;align-items:center;gap:0.35rem;">
+                <input type="radio" name="renderMode" value="auto" checked> Full render (Camoufox, best for JS-heavy pages)
+            </label>
+            <label style="display:flex;align-items:center;gap:0.35rem;">
+                <input type="radio" name="renderMode" value="never"> Plain HTTP fetch (faster, static pages only)
+            </label>
+        </div>
+        <div class="progress-bar" id="progressBar"><div class="progress-bar-fill" id="progressFill"></div></div>
+    </div>
+
+    <div id="status" class="status"></div>
+
+    <div class="card">
+        <h3 style="margin-bottom:1rem;">📁 Saved Clones</h3>
+        <div id="clonesList" class="clones-list"><em style="color:var(--text-secondary)">Loading...</em></div>
+    </div>
+</div>
+
+<script>
+    const API = '';  // Same origin
+
+    const urlInput = document.getElementById('urlInput');
+    const cloneBtn = document.getElementById('cloneBtn');
+    const statusEl = document.getElementById('status');
+    const clonesList = document.getElementById('clonesList');
+
+    function showStatus(msg, type = 'info') {
+        statusEl.textContent = msg;
+        statusEl.className = `status show ${type}`;
+    }
+
+    // ── Clone ────────────────────────────────────────
+    cloneBtn.addEventListener('click', async () => {
+        let url = urlInput.value.trim();
+        if (!url) return showStatus('Enter a URL', 'error');
+        if (!url.startsWith('http')) { url = 'https://' + url; urlInput.value = url; }
+
+        cloneBtn.disabled = true;
+        showStatus('Cloning... (server-side, no CORS issues)', 'info');
+
+        try {
+            const res = await fetch(`${API}/api/clone`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    url,
+                    includeImages: document.getElementById('includeImages').checked,
+                    removeScripts: document.getElementById('removeScripts').checked,
+                    renderMode: document.querySelector('input[name="renderMode"]:checked').value
+                })
+            });
+            const data = await res.json();
+
+            if (data.status === 'success') {
+                const via = data.metadata.rendered ? 'full render' : 'plain fetch';
+                showStatus(`✅ Cloned! ID: ${data.cloneId} | ${data.metadata.files.total} files saved (${via})`, 'success');
+                loadClones();
+            } else {
+                showStatus(`❌ ${data.error}`, 'error');
+            }
+        } catch (e) {
+            showStatus(`❌ ${e.message}`, 'error');
+        } finally {
+            cloneBtn.disabled = false;
+        }
+    });
+
+    // ── Load Clones List ─────────────────────────────
+    async function loadClones() {
+        try {
+            const res = await fetch(`${API}/api/clones`);
+            const data = await res.json();
+
+            if (data.clones.length === 0) {
+                clonesList.innerHTML = '<em style="color:var(--text-secondary)">No clones yet.</em>';
+                return;
+            }
+
+            clonesList.innerHTML = data.clones.map(c => `
+                <div class="clone-item">
+                    <div>
+                        <strong>${c.metadata?.title || c.id}</strong>
+                        <div class="meta">${c.metadata?.url || ''} · ${c.metadata?.files?.images?.length || 0} images · ${c.metadata?.rendered ? 'full render' : 'plain fetch'} · ${c.metadata?.clonedAt?.slice(0,10) || ''}</div>
+                    </div>
+                    <div style="display:flex;gap:0.5rem;">
+                        <a class="btn-secondary" style="padding:0.4rem 0.8rem;font-size:0.8rem;text-decoration:none;" href="${API}/preview/${c.id}/" target="_blank" rel="noopener">Preview</a>
+                        <button class="btn-secondary" style="padding:0.4rem 0.8rem;font-size:0.8rem;" onclick="downloadZip('${c.id}')">ZIP</button>
+                        <button class="btn-secondary" style="padding:0.4rem 0.8rem;font-size:0.8rem;color:var(--error);" onclick="deleteClone('${c.id}')">Del</button>
+                    </div>
+                </div>
+            `).join('');
+        } catch (e) {
+            clonesList.innerHTML = '<em style="color:var(--error)">Failed to load clones</em>';
+        }
+    }
+
+    async function downloadZip(cloneId) {
+        window.open(`${API}/api/clones/${cloneId}/zip`, '_blank');
+    }
+
+    async function deleteClone(cloneId) {
+        if (!confirm(`Delete ${cloneId}?`)) return;
+        await fetch(`${API}/api/clones/${cloneId}`, { method: 'DELETE' });
+        loadClones();
+    }
+
+    loadClones();
+</script>
+</body>
+</html>

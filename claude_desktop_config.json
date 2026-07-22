@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "web-clone-agent": {
+      "command": "docker",
+      "args": [
+        "exec", "-i", "web-clone-agent",
+        "node", "src/mcp/mcp-server.js"
+      ]
+    }
+  }
+}
