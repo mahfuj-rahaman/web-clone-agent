@@ -2,6 +2,8 @@
 
 AI-first website cloning tool. Give it a URL, it renders the page in a real (stealth) browser, inlines CSS, downloads images, strips scripts (optional), and saves a self-contained, offline-browsable copy to disk — accessible via CLI, REST API, MCP (for AI agents like Claude Desktop), or a browser GUI. Saved clones can be viewed instantly at `/preview/<cloneId>/` without leaving the app.
 
+**License:** personal and non-profit use only — no commercial use. See [`LICENSE.md`](./LICENSE.md).
+
 ## Quick start (Docker — nothing else to install)
 
 Everything runs inside Docker. You don't need Node, Python, or a browser installed on the host — `docker compose` builds both the app and its Camoufox rendering sidecar for you.

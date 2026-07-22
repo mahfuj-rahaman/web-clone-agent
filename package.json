@@ -2,6 +2,7 @@
   "name": "web-clone-agent",
   "version": "1.0.0",
   "description": "AI-first website cloning agent with CLI, MCP, REST API and Browser GUI",
+  "license": "SEE LICENSE IN LICENSE.md",
   "type": "module",
   "scripts": {
     "server": "node src/server/server.js",
