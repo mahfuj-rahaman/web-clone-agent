@@ -21,7 +21,7 @@ import dotenv from 'dotenv';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
-import { clonePage, listClones, readCloneFile, deleteClone, getCloneZip } from '../core/cloner.js';
+import { clonePage, cloneSite, listClones, readCloneFile, deleteClone, getCloneZip } from '../core/cloner.js';
 
 dotenv.config();
 
@@ -74,6 +74,51 @@ server.tool(
             return { content: [{ type: 'text', text: summary }] };
         } catch (e) {
             return { content: [{ type: 'text', text: `❌ Clone failed: ${e.message}` }], isError: true };
+        }
+    }
+);
+
+// ─── Tool: clone_site ────────────────────────────────
+server.tool(
+    'clone_site',
+    'Recursively clone a whole website: crawls pages on the same site only (links to other domains are left as live links and never followed), ' +
+    'saves each page as <path>/index.html with internal links rewritten to the local copies, and downloads images (CDN images included) so pages render offline.',
+    {
+        url: z.string().describe('Start URL of the crawl'),
+        maxPages: z.number().int().min(0).optional().describe('Stop after this many pages (default 50, 0 = no limit)'),
+        maxDepth: z.number().int().min(0).optional().describe('Max link hops from the start page (default 3)'),
+        pathPrefix: z.string().optional().describe('Only follow pages whose path starts with this, e.g. "/blog/"'),
+        includeSubdomains: z.boolean().optional().default(false).describe('Also follow links to subdomains of the start host'),
+        exclude: z.array(z.string()).optional().describe('Regexes; matching URLs are skipped'),
+        useSitemap: z.boolean().optional().default(true).describe('Seed the crawl from sitemaps found via robots.txt and /sitemap.xml'),
+        sitemapUrls: z.array(z.string()).optional().describe('Sitemap URLs whose every page should be crawled (indexes and .xml.gz followed); overrides discovery'),
+        includeImages: z.boolean().optional().default(true).describe('Download and save all images locally'),
+        removeScripts: z.boolean().optional().default(true).describe('Remove JavaScript for clean static clone'),
+        createZip: z.boolean().optional().default(false).describe('Also create a ZIP archive'),
+        renderMode: z.enum(['auto', 'always', 'never']).optional().describe('Same as clone_page')
+    },
+    async ({ url, ...opts }) => {
+        try {
+            const clean = Object.fromEntries(Object.entries(opts).filter(([, v]) => v !== undefined));
+            const result = await cloneSite(url, clean);
+            const { pages, failed, files } = result.metadata;
+            const summary = [
+                `✅ Crawled: ${url}`,
+                `   Clone ID: ${result.cloneId}`,
+                `   Path: ${result.outputPath}`,
+                `   Pages: ${pages.length} saved, ${failed.length} failed`,
+                ...(result.metadata.sitemap ? [`   Sitemaps: ${result.metadata.sitemap.urls} URLs from ${result.metadata.sitemap.sources.length} sitemap(s)`] : []),
+                `   Images: ${files.images.length}`,
+                ``,
+                `   Pages:`,
+                ...pages.map(p => `   • ${p.path}  ←  ${p.url}`),
+                ...(failed.length ? [``, `   Failed:`, ...failed.map(f => `   • ${f.url} (${f.error})`)] : []),
+                ``,
+                `   Use read_clone_file with a page path above to read it.`
+            ].join('\n');
+            return { content: [{ type: 'text', text: summary }] };
+        } catch (e) {
+            return { content: [{ type: 'text', text: `❌ Site clone failed: ${e.message}` }], isError: true };
         }
     }
 );

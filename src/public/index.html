@@ -62,6 +62,16 @@
             <input type="checkbox" id="removeScripts" checked>
             <label for="removeScripts">Remove JavaScript</label>
         </div>
+        <div class="checkbox-group">
+            <input type="checkbox" id="recursive">
+            <label for="recursive">Crawl whole site (same-site links only), up to</label>
+            <input type="number" id="maxPages" value="50" min="1" style="width:5rem;height:auto;">
+            <label for="maxPages">pages (0 = no limit)</label>
+        </div>
+        <div class="checkbox-group">
+            <label for="sitemapUrl">Sitemap URL (optional, crawls every page it lists):</label>
+            <input type="text" id="sitemapUrl" placeholder="https://example.com/sitemap_index.xml" style="flex:1;height:auto;">
+        </div>
         <div class="checkbox-group" style="gap:1.25rem;">
             <span>Fetch method:</span>
             <label style="display:flex;align-items:center;gap:0.35rem;">
@@ -112,14 +122,20 @@
                     url,
                     includeImages: document.getElementById('includeImages').checked,
                     removeScripts: document.getElementById('removeScripts').checked,
-                    renderMode: document.querySelector('input[name="renderMode"]:checked').value
+                    renderMode: document.querySelector('input[name="renderMode"]:checked').value,
+                    recursive: document.getElementById('recursive').checked,
+                    crawl: {
+                        maxPages: Number.isNaN(parseInt(document.getElementById('maxPages').value, 10)) ? undefined : parseInt(document.getElementById('maxPages').value, 10),
+                        sitemapUrls: document.getElementById('sitemapUrl').value.trim() ? [document.getElementById('sitemapUrl').value.trim()] : undefined
+                    }
                 })
             });
             const data = await res.json();
 
             if (data.status === 'success') {
                 const via = data.metadata.rendered ? 'full render' : 'plain fetch';
-                showStatus(`✅ Cloned! ID: ${data.cloneId} | ${data.metadata.files.total} files saved (${via})`, 'success');
+                const pages = data.metadata.pages ? `${data.metadata.pages.length} pages, ` : '';
+                showStatus(`✅ Cloned! ID: ${data.cloneId} | ${pages}${data.metadata.files.total} files saved (${via})`, 'success');
                 loadClones();
             } else {
                 showStatus(`❌ ${data.error}`, 'error');

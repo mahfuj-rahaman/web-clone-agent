@@ -67,7 +67,28 @@ clones/<hostname>_<timestamp>/
   metadata.json         # id, url, hostname, clonedAt, options, rendered flag, file list
   _broken-image.svg     # only present if at least one image failed to download
   <original-path>/...   # images, mirroring the site's own URL path structure
+  _external/<host>/...  # images served from other hosts (CDNs), kept apart so paths can't collide
 ```
+
+## Cloning a whole site (recursive crawl)
+
+```bash
+docker exec -it web-clone-agent node src/cli/cli.js crawl https://example.com --max-pages 100 --max-depth 3
+```
+
+Starts at the URL and follows links breadth-first (also seeded from `/sitemap.xml`), but **only links on the same site** — `www.` is ignored, subdomains need `--subdomains`, and links to other domains stay as live links and are never fetched. Off-site *assets* the pages need to render (CDN images, stylesheets) are still downloaded/inlined. Non-HTML links (PDFs, zips, media) and admin/auth/cart/feed URLs are skipped.
+
+Each page is saved at `<path>/index.html` (`/about` → `about/index.html`, `?query` pages get a short hash suffix), internal links are rewritten to relative links between the saved copies, and shared images/stylesheets are fetched once for the whole crawl. `metadata.json` lists every saved page and every page that failed.
+
+**Sitemaps (best way to get every page):** pass `--sitemap https://example.com/sitemap_index.xml` (repeatable) and every page it lists is crawled — sitemap indexes, CDATA `<loc>`s and `.xml.gz` are followed. Without it, sitemaps are discovered from `robots.txt` `Sitemap:` lines and `/sitemap.xml`, `/sitemap_index.xml`, `/wp-sitemap.xml`. If a site blocks plain requests for its sitemap (403), it's fetched through Camoufox instead. Combine with `--max-pages 0` (no limit) to take everything:
+
+```bash
+docker exec -it web-clone-agent node src/cli/cli.js crawl https://example.com --sitemap https://example.com/sitemap_index.xml --max-pages 0 --max-depth 0
+```
+
+(`--max-depth 0` = only the sitemap's pages; raise it to also follow links out of them.)
+
+Options: `--max-pages`, `--max-depth`, `--concurrency`, `--delay <ms>`, `--prefix /blog/` (stay under a path), `--exclude <regex>` (repeatable), `--subdomains`, `--sitemap <url>`, `--no-sitemap`, plus the normal clone flags. Same thing via REST (`recursive: true`, `crawl.sitemapUrls`) and MCP (`clone_site`).
 
 ## Previewing a saved clone
 
@@ -83,7 +104,7 @@ The GUI's "Saved Clones" list has a **Preview** button/link for this. It's a pla
 
 See `REST API.md` for curl examples. Summary:
 
-- `POST /api/clone` — `{ url, includeImages?, removeScripts?, createZip?, renderMode? }` (`renderMode`: `"auto"` | `"always"` | `"never"`)
+- `POST /api/clone` — `{ url, includeImages?, removeScripts?, createZip?, renderMode?, recursive?, crawl? }` (`renderMode`: `"auto"` | `"always"` | `"never"`; `recursive: true` crawls the site, `crawl`: `{ maxPages, maxDepth, concurrency, delayMs, includeSubdomains, pathPrefix, exclude, useSitemap }`)
 - `GET /api/clones` — list all clones
 - `GET /api/clones/:id` — single clone metadata
 - `GET /api/clones/:id/file?path=...` — read a file's content
@@ -94,7 +115,7 @@ See `REST API.md` for curl examples. Summary:
 
 ## MCP server (for AI agents)
 
-Exposes `clone_page` (accepts an optional `renderMode`), `list_clones`, `read_clone_file`, `delete_clone` as MCP tools over stdio. See `claude_desktop_config.json` for an example client config — it runs the server via `docker exec -i web-clone-agent node src/mcp/mcp-server.js`, so it expects the Docker stack already running (`docker compose up -d`).
+Exposes `clone_page` (accepts an optional `renderMode`), `clone_site` (recursive same-site crawl), `list_clones`, `read_clone_file`, `delete_clone` as MCP tools over stdio. See `claude_desktop_config.json` for an example client config — it runs the server via `docker exec -i web-clone-agent node src/mcp/mcp-server.js`, so it expects the Docker stack already running (`docker compose up -d`).
 
 ## Configuration
 
@@ -116,6 +137,8 @@ Set via `.env` (see `.env.example`):
 | `CAMOUFOX_WS_ENDPOINT` | Websocket endpoint of the Camoufox server (default `ws://camoufox:9222/camoufox`, matching `docker-compose.yml`) |
 | `API_KEY` | Optional; if set, `POST /api/clone` and `DELETE /api/clones/:id` require header `x-api-key: <value>` |
 | `RATE_LIMIT_PER_MINUTE` | Max `POST /api/clone` requests per IP per minute |
+| `CRAWL_MAX_PAGES` / `CRAWL_MAX_DEPTH` | Default crawl limits (50 pages, 3 link hops) |
+| `CRAWL_CONCURRENCY` / `CRAWL_DELAY_MS` | Pages fetched in parallel, and pause between requests per worker |
 
 ## Docker
 

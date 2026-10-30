@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
-import { clonePage, listClones, readCloneFile, deleteClone, getCloneZip, resolveCloneFilePath, CONFIG, log } from '../core/cloner.js';
+import { clonePage, cloneSite, listClones, readCloneFile, deleteClone, getCloneZip, resolveCloneFilePath, CONFIG, log } from '../core/cloner.js';
 
 dotenv.config();
 
@@ -34,6 +34,11 @@ function safePublicPath(pathname) {
     const resolved = path.resolve(PUBLIC_DIR, '.' + decoded);
     if (resolved !== PUBLIC_DIR && !resolved.startsWith(PUBLIC_DIR + path.sep)) return null;
     return resolved;
+}
+
+const CRAWL_OPTION_KEYS = ['maxPages', 'maxDepth', 'concurrency', 'delayMs', 'includeSubdomains', 'pathPrefix', 'exclude', 'useSitemap', 'sitemapUrls'];
+function pickCrawlOptions(crawl) {
+    return Object.fromEntries(CRAWL_OPTION_KEYS.filter(k => crawl[k] !== undefined).map(k => [k, crawl[k]]));
 }
 
 function sendJSON(res, data, status = 200) {
@@ -74,17 +79,23 @@ const server = http.createServer(async (req, res) => {
 
         try {
             const body = await parseBody(req);
-            const { url: targetUrl, includeImages, removeScripts, createZip, renderMode } = body;
+            const { url: targetUrl, includeImages, removeScripts, createZip, renderMode, recursive, crawl = {} } = body;
 
             if (!targetUrl) return sendJSON(res, { error: 'Missing "url"' }, 400);
 
-            const result = await clonePage(targetUrl, {
+            const opts = {
                 includeImages: includeImages ?? CONFIG.defaultIncludeImages,
                 removeScripts: removeScripts ?? CONFIG.defaultRemoveScripts,
                 saveToDisk: true,
                 createZip: createZip || false,
                 renderMode: renderMode ?? CONFIG.renderMode
-            }, (msg, pct) => log(`[${pct}%] ${msg}`));
+            };
+            const onProgress = (msg, pct) => log(`[${pct}%] ${msg}`);
+            // recursive: true crawls same-site pages; `crawl` carries cloneSite's limits
+            // ({ maxPages, maxDepth, concurrency, delayMs, includeSubdomains, pathPrefix, exclude, useSitemap, sitemapUrls }).
+            const result = recursive
+                ? await cloneSite(targetUrl, { ...opts, ...pickCrawlOptions(crawl) }, onProgress)
+                : await clonePage(targetUrl, opts, onProgress);
 
             const response = {
                 status: 'success',

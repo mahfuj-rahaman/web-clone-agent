@@ -8,7 +8,7 @@ A Node.js (ESM, `"type": "module"`) website-cloning tool with four interfaces �
 
 ## Source map
 
-- `src/core/cloner.js` — the engine. `clonePage()`, `listClones()`, `readCloneFile()`, `deleteClone()`, `getCloneZip()`. Any behavior change to cloning belongs here; the other three interfaces are thin wrappers.
+- `src/core/cloner.js` — the engine. `clonePage()` (one page), `cloneSite()` (recursive same-site crawl; both share `processPage()`), `listClones()`, `readCloneFile()`, `deleteClone()`, `getCloneZip()`. Any behavior change to cloning belongs here; the other three interfaces are thin wrappers.
 - `src/core/renderer.js` — connects to a Camoufox server sidecar (via `playwright-core`'s cross-language websocket protocol, `firefox.connect()`) to fully render JS-heavy pages before `clonePage()` processes the HTML. Falls back to the plain HTTP fetch in `cloner.js` on any failure unless `RENDER_MODE=always`.
 - `src/server/server.js` — REST API + static file host for `src/public/`.
 - `src/cli/cli.js` — argv-parsed CLI, always emits JSON.
@@ -23,6 +23,12 @@ A Node.js (ESM, `"type": "module"`) website-cloning tool with four interfaces �
 - Config lives in `.env` / `.env.example`, read via `CONFIG` in `cloner.js`. Don't hardcode ports, timeouts, or paths.
 - No test suite currently exists. If you add one, wire it into `package.json` scripts.
 - Keep new REST endpoints and MCP tools symmetric where it makes sense (e.g., if you add a capability to `cloner.js`, consider exposing it in both the REST API and MCP server).
+
+## Recursive crawl (`cloneSite()`)
+
+- Follows only same-site links (`isSameSite`: `www.` ignored, subdomains opt-in); third-party pages are never fetched, their links stay absolute. Off-site images are still downloaded, under `_external/<host>/`.
+- `pageLocalPath()` maps a URL to its saved file and is also the dedupe key; images use an `assetPrefix` (`../` per directory level) so they resolve from nested pages. Internal links are rewritten in a final pass over the saved files, only for pages that were actually saved.
+- CSS/image downloads are cached per crawl (`cache` passed into `processPage`), so a shared logo/stylesheet is fetched once.
 
 ## Known gaps / things to be careful about
 

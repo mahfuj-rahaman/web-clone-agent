@@ -22,6 +22,15 @@ function getBrowser(wsEndpoint) {
     return browserPromise;
 }
 
+// Drops the shared Camoufox connection. One-shot callers (the CLI) must call
+// this when done — the open websocket otherwise keeps the Node process alive.
+export async function closeBrowser() {
+    if (!browserPromise) return;
+    const pending = browserPromise;
+    browserPromise = null;
+    try { await (await pending).close(); } catch { /* never connected / already gone */ }
+}
+
 /**
  * Renders `targetUrl` in a real browser tab and returns the fully-loaded DOM HTML.
  * Throws on any connection/navigation failure so callers can fall back to a
@@ -206,6 +215,28 @@ async function hoverSweep(page) {
  * Throws on any non-2xx response, matching the plain-HTTP fetchUrl behavior
  * in cloner.js so callers can treat both paths identically.
  */
+/**
+ * Fetches a non-HTML document (sitemap XML, robots.txt) by opening it in a
+ * real browser tab, for sites that 403 any non-browser client. Falls back to
+ * the context's request API (same cookies the navigation just picked up) for
+ * things Firefox won't display inline, like gzipped sitemaps.
+ */
+export async function fetchDocumentViaBrowser(url, { wsEndpoint, timeoutMs = 15000 } = {}) {
+    if (!wsEndpoint) throw new Error('CAMOUFOX_WS_ENDPOINT is not configured');
+    const browser = await getBrowser(wsEndpoint);
+    const context = await browser.newContext();
+    try {
+        const page = await context.newPage();
+        try {
+            const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: timeoutMs });
+            if (response && response.ok()) return Buffer.from(await response.body());
+        } catch { /* fall through to the request API */ }
+        return await fetchViaContext(context, url, { timeoutMs });
+    } finally {
+        await context.close().catch(() => {});
+    }
+}
+
 export async function fetchViaContext(context, url, { timeoutMs = 15000 } = {}) {
     const response = await context.request.get(url, { timeout: timeoutMs });
     if (!response.ok()) {
